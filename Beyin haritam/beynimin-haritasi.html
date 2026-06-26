@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beynimin Haritası</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    overflow: hidden;
+    position: relative;
+    background: #0a0f1a;
+  }
+
+  /* Star dust particles */
+  .stars {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  canvas {
+    display: block;
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  #bg-fade {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    transition: opacity 4.5s cubic-bezier(0.15, 0.75, 0.2, 0.95);
+    opacity: 1;
+  }
+
+  #mindmap-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2;
+    overflow: hidden;
+  }
+
+  svg#mindmap {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  svg#mindmap:active {
+    cursor: grabbing;
+  }
+
+  .zoomable-node {
+    cursor: pointer;
+  }
+
+  .zoomable-node:hover {
+    opacity: 0.8;
+    filter: brightness(1.2) !important;
+  }
+
+  /* Node circles */
+  .node-central {
+    fill: #1a8fe3;
+    stroke: #4db3f0;
+    stroke-width: 5.5;
+    stroke-opacity: 0.6;
+    filter: drop-shadow(0 0 20px rgba(26,143,227,0.8));
+  }
+
+  .node-green { fill: #1db888; stroke: #4dd9a8; stroke-width: 5.5; stroke-opacity: 0.6; filter: drop-shadow(0 0 14px rgba(29,184,136,0.7)); }
+  .node-purple { fill: #7c4dff; stroke: #a880ff; stroke-width: 5.5; stroke-opacity: 0.6; filter: drop-shadow(0 0 14px rgba(124,77,255,0.7)); }
+  .node-yellow { fill: #f5a623; stroke: #f9c76b; stroke-width: 5.5; stroke-opacity: 0.6; filter: drop-shadow(0 0 14px rgba(245,166,35,0.7)); }
+  .node-red { fill: #e84393; stroke: #f07ab8; stroke-width: 5.5; stroke-opacity: 0.6; filter: drop-shadow(0 0 14px rgba(232,67,147,0.7)); }
+  .node-teal { fill: #00bcd4; stroke: #4dd9e8; stroke-width: 5.5; stroke-opacity: 0.6; filter: drop-shadow(0 0 14px rgba(0,188,212,0.7)); }
+  .node-orange { fill: #ff6d3a; stroke: #ff9566; stroke-width: 5.5; stroke-opacity: 0.6; filter: drop-shadow(0 0 14px rgba(255,109,58,0.7)); }
+
+  /* Child nodes */
+  .child-green { fill: #17a377; stroke: #3dc99a; stroke-width: 4; stroke-opacity: 0.6; filter: drop-shadow(0 0 10px rgba(29,184,136,0.6)); }
+  .child-purple { fill: #6a3de8; stroke: #9566ff; stroke-width: 4; stroke-opacity: 0.6; filter: drop-shadow(0 0 10px rgba(124,77,255,0.6)); }
+  .child-yellow { fill: #d4900f; stroke: #e8b84d; stroke-width: 4; stroke-opacity: 0.6; filter: drop-shadow(0 0 10px rgba(245,166,35,0.6)); }
+  .child-red { fill: #cc2a7e; stroke: #e85ba3; stroke-width: 4; stroke-opacity: 0.6; filter: drop-shadow(0 0 10px rgba(232,67,147,0.6)); }
+
+  /* Hobiler - Crimson Red */
+  .node-hobiler { fill: #cc0000; stroke: #ff6666; stroke-width: 5.5; stroke-opacity: 0.6; filter: drop-shadow(0 0 14px rgba(204,0,0,0.7)); }
+  .child-hobiler { fill: #990000; stroke: #ff4444; stroke-width: 4; stroke-opacity: 0.6; filter: drop-shadow(0 0 10px rgba(204,0,0,0.6)); }
+  .child-teal { fill: #009ab5; stroke: #3dc9e0; stroke-width: 4; stroke-opacity: 0.6; filter: drop-shadow(0 0 10px rgba(0,188,212,0.6)); }
+  .child-orange { fill: #e85520; stroke: #f78a52; stroke-width: 4; stroke-opacity: 0.6; filter: drop-shadow(0 0 10px rgba(255,109,58,0.6)); }
+
+  /* Text labels on nodes */
+  .node-label {
+    fill: #ffffff;
+    font-weight: 700;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    pointer-events: none;
+    letter-spacing: 0.5px;
+  }
+
+  .central-label { font-size: 16px; font-weight: 800; letter-spacing: 1px; }
+  .main-label { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; }
+  .child-label { font-size: 8.5px; font-weight: 600; }
+
+  /* Connection lines */
+  .connection {
+    stroke-width: 1.2;
+    fill: none;
+    stroke-dasharray: 4,4;
+    opacity: 0.5;
+  }
+
+  .conn-green  { stroke: #1db888; }
+  .conn-purple { stroke: #7c4dff; }
+  .conn-yellow { stroke: #f5a623; }
+  .conn-red    { stroke: #e84393; }
+  .conn-teal   { stroke: #00bcd4; }
+  .conn-orange { stroke: #ff6d3a; }
+  .conn-center { stroke: #4a9ede; stroke-dasharray: none; opacity: 0.3; stroke-width: 1; }
+
+  /* Info boxes */
+  .info-box {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+
+  .info-box.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .info-box rect {
+    rx: 6;
+    ry: 6;
+    stroke-width: 1;
+    opacity: 0.95;
+  }
+
+  .info-text {
+    fill: #c8d8f0;
+    font-size: 7.5px;
+    font-weight: 400;
+  }
+
+  .info-title {
+    fill: #ffffff;
+    font-size: 8px;
+    font-weight: 600;
+  }
+
+  #info-panel {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 420px;
+    max-height: 90vh;
+    background: rgba(13, 27, 62, 0.95);
+    border: 3px solid #1a8fe3;
+    border-radius: 12px;
+    padding: 32px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+    opacity: 0;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+  }
+
+  #info-panel.visible {
+    display: block;
+    opacity: 1;
+    right: 20px;
+  }
+
+  #info-panel h2 {
+    color: #ffffff;
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    letter-spacing: 0.5px;
+  }
+
+  #info-panel p {
+    color: #c8d8f0;
+    font-size: 16px;
+    line-height: 1.7;
+    margin-bottom: 12px;
+  }
+
+  #info-panel .close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: #ffffff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  #info-panel .close-btn:hover {
+    background: rgba(255,255,255,0.3);
+  }
+</style>
+</head>
+<body>
+
+<canvas id="starCanvas"></canvas>
+
+<div id="bg-fade"></div>
+
+<div id="info-panel">
+  <button class="close-btn">✕</button>
+  <div id="info-content"></div>
+</div>
+
+<div id="mindmap-container">
+<svg id="mindmap" viewBox="0 0 1400 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow-blue">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-soft">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- ═══════════════════ CONNECTION LINES ═══════════════════ -->
+
+  <!-- Center to main nodes -->
+  <line x1="700" y1="450" x2="370" y2="270" class="connection conn-center"/>
+  <line x1="700" y1="450" x2="820" y2="155" class="connection conn-center"/>
+  <line x1="700" y1="450" x2="980" y2="290" class="connection conn-center"/>
+  <line x1="700" y1="450" x2="960" y2="510" class="connection conn-center"/>
+  <line x1="700" y1="450" x2="810" y2="660" class="connection conn-center"/>
+  <line x1="700" y1="450" x2="340" y2="590" class="connection conn-center"/>
+  <line x1="700" y1="450" x2="720" y2="80" class="connection conn-center"/>
+
+  <!-- GREEN (İlgi Alanları) → children -->
+  <line x1="370" y1="270" x2="200" y2="290" class="connection conn-green"/>
+  <line x1="370" y1="270" x2="310" y2="170" class="connection conn-green"/>
+
+  <!-- İlgi Alanları - Gaming bağlantısı -->
+  <line x1="370" y1="270" x2="340" y2="590" class="connection conn-green"/>
+
+  <!-- Elektronik - Geri Sayım Sayacı bağlantısı -->
+  <line x1="200" y1="290" x2="950" y2="95" class="connection conn-green"/>
+
+
+  <!-- PURPLE (Projeler) → children -->
+  <line x1="820" y1="155" x2="950" y2="95"  class="connection conn-purple"/>
+  <line x1="820" y1="155" x2="1000" y2="170" class="connection conn-purple"/>
+  <line x1="820" y1="155" x2="720" y2="80"  class="connection conn-purple"/>
+
+  <!-- Beynimin Haritası (Mind Map) → children -->
+  <line x1="720" y1="80" x2="1050" y2="600" class="connection conn-purple"/>
+  <line x1="720" y1="80" x2="1090" y2="545" class="connection conn-red"/>
+
+  <!-- Veritabanı - Veritabanlı PyQt5 Uygulaması bağlantısı -->
+  <line x1="1020" y1="380" x2="1000" y2="170" class="connection conn-purple"/>
+
+  <!-- Python/PyQt5 - Veritabanlı PyQt5 Uygulaması bağlantısı -->
+  <line x1="1100" y1="240" x2="1000" y2="170" class="connection conn-yellow"/>
+
+  <!-- BAUN CENG - Projeler çocuk düğümleri bağlantıları -->
+  <line x1="1090" y1="545" x2="950" y2="95" class="connection conn-red"/>
+  <line x1="1090" y1="545" x2="1000" y2="170" class="connection conn-red"/>
+
+
+  <!-- YELLOW (Beceriler/SEM) → children -->
+  <line x1="980" y1="290" x2="1100" y2="240" class="connection conn-yellow"/>
+  <line x1="980" y1="290" x2="1110" y2="320" class="connection conn-yellow"/>
+  <line x1="980" y1="290" x2="1020" y2="380" class="connection conn-yellow"/>
+
+
+  <!-- RED (Kariyer) → children -->
+  <line x1="960" y1="510" x2="1090" y2="545" class="connection conn-red"/>
+  <line x1="960" y1="510" x2="1050" y2="600" class="connection conn-red"/>
+
+
+  <!-- Gaming (daha aşağı ve sola taşındı) → children -->
+  <line x1="340" y1="590" x2="200" y2="550" class="connection conn-red"/>
+  <line x1="340" y1="590" x2="400" y2="485" class="connection conn-red"/>
+  <line x1="340" y1="590" x2="520" y2="590" class="connection conn-red"/>
+  <line x1="340" y1="590" x2="420" y2="700" class="connection conn-red"/>
+  <line x1="340" y1="590" x2="260" y2="700" class="connection conn-red"/>
+
+
+  <!-- Hobiler (Hobiler merkezi 810'a taşındı) → children -->
+  <line x1="810" y1="660" x2="680" y2="720" class="connection conn-orange"/>
+  <line x1="810" y1="660" x2="680" y2="800" class="connection conn-orange"/>
+  <line x1="810" y1="660" x2="790" y2="770" class="connection conn-orange"/>
+  <line x1="810" y1="660" x2="860" y2="760" class="connection conn-orange"/>
+
+  <!-- AI Araçları - Teknoloji Takibi ekstra bağlantısı -->
+  <line x1="1050" y1="600" x2="860" y2="760" class="connection conn-orange"/>
+
+  <!-- Gaming - Hobiler bağlantısı -->
+  <line x1="340" y1="590" x2="810" y2="660" class="connection conn-red"/>
+
+
+  <!-- ═══════════════════ CHILD NODES ═══════════════════ -->
+
+  <!-- GREEN children -->
+<circle cx="200" cy="290" r="22" class="child-green" filter="url(#glow-soft)" data-info='{"title":"Elektronik / TTL","color":"#1db888","text":"Transistor-Transistor Logic devrelerine derinlemesine ilgi. Dijital elektronik mantık devreleri."}'/>
+  <text x="200" y="288" class="node-label child-label">Elekt-</text>
+  <text x="200" y="298" class="node-label child-label">ronik</text>
+
+<circle cx="310" cy="170" r="22" class="child-green" filter="url(#glow-soft)" data-info='{"title":"Yazılım Geliştirme","color":"#1db888","text":"Yazılım geliştirme pratikleri ve mimarisi. Temiz kod, veri yapıları ve algoritma ilgisi."}'/>
+  <text x="310" y="168" class="node-label child-label">Yazılım</text>
+  <text x="310" y="178" class="node-label child-label">Dev.</text>
+
+  <!-- PURPLE children -->
+  <circle cx="950" cy="95" r="22" class="child-purple" filter="url(#glow-soft)" data-info='{"title":"Geri Sayım Sayacı","color":"#7c4dff","text":"TTL logic devreleri kullanarak tasarlanmış dijital elektronik geri sayım sayacı. Sayma devresi ve display gösterimi ile geri sayım işlevselliği sunan elektronik proje."}'/>
+  <text x="950" y="93" class="node-label child-label">Geri Sayım</text>
+  <text x="950" y="103" class="node-label child-label">Sayacı</text>
+
+  <circle cx="1000" cy="170" r="22" class="child-purple" filter="url(#glow-soft)" data-info='{"title":"Veritabanlı PyQt5 Uygulaması","color":"#7c4dff","text":"PyQt5 framework'ü ile geliştirilen masaüstü uygulaması. Veritabanı entegrasyonu ve GUI tasarımı pratiği."}'/>
+  <text x="1000" y="165" class="node-label child-label">Veritabanlı</text>
+  <text x="1000" y="175" class="node-label child-label">PyQt5</text>
+  <text x="1000" y="185" class="node-label child-label">Uygulaması</text>
+
+  <circle cx="720" cy="80" r="22" class="child-purple" filter="url(#glow-soft)" data-info='{"title":"Beynimin Haritası (Mind Map)","color":"#7c4dff","text":"Kişisel yaşam ve gelişim haritası projesi. SVG ve JavaScript ile etkileşimli görsel sunu."}'/>
+  <text x="720" y="78" class="node-label child-label">Mind</text>
+  <text x="720" y="88" class="node-label child-label">Map</text>
+
+  <!-- YELLOW children -->
+  <circle cx="1100" cy="240" r="22" class="child-yellow" filter="url(#glow-soft)" data-info='{"title":"Python / PyQt5","color":"#f5a623","text":"Python programlama dili ve PyQt5 framework'ü. Masaüstü GUI uygulamaları geliştirme becerisi."}'/>
+  <text x="1100" y="238" class="node-label child-label">Python</text>
+  <text x="1100" y="248" class="node-label child-label">PyQt5</text>
+
+  <circle cx="1110" cy="320" r="22" class="child-yellow" filter="url(#glow-soft)" data-info='{"title":"React / Vite","color":"#f5a623","text":"React ile component tabanlı web uygulamaları geliştirme. Vite ile hızlı build ve development server deneyimi."}'/>
+  <text x="1110" y="318" class="node-label child-label">React /</text>
+  <text x="1110" y="328" class="node-label child-label">Vite</text>
+
+<circle cx="1020" cy="380" r="22" class="child-yellow" filter="url(#glow-soft)" data-info='{"title":"Veritabanı","color":"#f5a623","text":"Veritabanı tasarımı ve SQL yönetimi. İlişkisel veri modelleri ve optimizasyon bilgisi."}'/>
+  <text x="1020" y="378" class="node-label child-label">Veri-</text>
+  <text x="1020" y="388" class="node-label child-label">tabanı</text>
+
+  <!-- RED children -->
+  <circle cx="1090" cy="545" r="22" class="child-red" filter="url(#glow-soft)" data-info='{"title":"Balıkesir Üniversitesi","color":"#e84393","text":"Balıkesir Üniversitesi Bilgisayar Mühendisliği bölümünde öğrencilik. Akademik projeler ve uygulamalar."}'/>
+  <text x="1090" y="543" class="node-label child-label">BAUN</text>
+  <text x="1090" y="553" class="node-label child-label">CENG</text>
+
+
+  <circle cx="1050" cy="600" r="22" class="child-red" filter="url(#glow-soft)" data-info='{"title":"Yapay Zeka Araçları","color":"#e84393","text":"Claude, ChatGPT, Gemini gibi AI araçlarını kullanma. Teknoloji takibi ve araştırma yapmanın yöntemi."}'/>
+  <text x="1050" y="598" class="node-label child-label">AI</text>
+  <text x="1050" y="608" class="node-label child-label">Araçları</text>
+
+  <!-- Gaming children (daha aşağı ve sola taşındı) -->
+  <circle cx="200" cy="550" r="22" class="child-hobiler" filter="url(#glow-soft)" data-info='{"title":"Counter Strike 2","color":"#cc0000","text":"5v5 takım tabanlı taktik ve strateji oyunu. Hızlı karar verme, takım koordinasyonu ve ekonomi yönetimini gerektiriyor."}'/>
+  <text x="200" y="548" class="node-label child-label">Counter</text>
+  <text x="200" y="558" class="node-label child-label">Strike 2</text>
+
+  <circle cx="400" cy="485" r="22" class="child-hobiler" filter="url(#glow-soft)" data-info='{"title":"Elden Ring","color":"#cc0000","text":"Zorlayıcı soulslike açık dünya fantezi action-RPG. Dark Souls tarzı combat ve öğren-ölüp-tekrar oyun mekanikleri. 316.5 saat harcayarak tüm başarıları tamamladığım oyun. Yaratıcı çözümler ve oyuncu özgürlüğü sunan en sevdiğim deneyimlerden biri."}'/>
+  <text x="400" y="483" class="node-label child-label">Elden</text>
+  <text x="400" y="493" class="node-label child-label">Ring</text>
+
+  <circle cx="520" cy="590" r="22" class="child-hobiler" filter="url(#glow-soft)" data-info='{"title":"Warhammer 40k Space Marine 2","color":"#cc0000","text":"Aksiyon dolu third-person shooter. Kozmik katliyam, epic savaşlar ve Warhammer 40k evreninin oynanabilir deneyimi."}'/>
+  <text x="520" y="588" class="node-label child-label">Warhammer</text>
+  <text x="520" y="598" class="node-label child-label">40k</text>
+
+  <circle cx="420" cy="700" r="22" class="child-hobiler" filter="url(#glow-soft)" data-info='{"title":"Batman Arkham Knight","color":"#cc0000","text":"Batman Arkham serisi. Detektif gameplay ve zengin Gotham hikâyeleri. Arkham Knight: 91.5 saat (113/113 başarı). Arkham Asylum: 32.2 saat (tüm başarılar)."}'/>
+  <text x="420" y="698" class="node-label child-label">Batman</text>
+  <text x="420" y="708" class="node-label child-label">Arkham</text>
+
+  <circle cx="260" cy="700" r="22" class="child-hobiler" filter="url(#glow-soft)" data-info='{"title":"Skyrim","color":"#cc0000","text":"Açık dünya fantezi RPG. İmmersive gameplay, zengin macera ve oyuncu özgürlüğü ile oynanabilir deneyim sunar."}'/>
+  <text x="260" y="698" class="node-label child-label">Skyrim</text>
+  <text x="260" y="708" class="node-label child-label">(TES V)</text>
+
+<!-- Hobiler children (yerleri değiştirildi) -->
+  <circle cx="680" cy="720" r="22" class="child-orange" filter="url(#glow-soft)" data-info='{"title":"Soldering / Devre","color":"#ff6d3a","text":"Elektronik devreleri lehimleme ve tasarlama. Hardware projelerinin pratik uygulaması."}'/>
+  <text x="680" y="718" class="node-label child-label">Solder-</text>
+  <text x="680" y="728" class="node-label child-label">ing</text>
+
+  <circle cx="680" cy="800" r="22" class="child-orange" filter="url(#glow-soft)" data-info='{"title":"Açık Kaynak","color":"#ff6d3a","text":"Open source yazılım projeleri. Topluluk katkısı ve işbirlikçi geliştirme tutkunu."}'/>
+  <text x="680" y="798" class="node-label child-label">Açık</text>
+  <text x="680" y="808" class="node-label child-label">Kaynak</text>
+
+  <circle cx="790" cy="770" r="22" class="child-orange" filter="url(#glow-soft)" data-info='{"title":"Müzik / Dinleti","color":"#ff6d3a","text":"Müzik dinleme ve podcast takibi. Hoşlanılan türler: elektronik, indie, lo-fi."}'/>
+  <text x="790" y="768" class="node-label child-label">Müzik /</text>
+  <text x="790" y="778" class="node-label child-label">Podcast</text>
+
+  <circle cx="860" cy="760" r="22" class="child-orange" filter="url(#glow-soft)" data-info='{"title":"Teknoloji Takibi","color":"#ff6d3a","text":"Yeni teknoloji trendleri, ürünler ve araştırmaları takip etme. AI, yazılım ve hardware gelişmeleri."}'/>
+  <text x="860" y="758" class="node-label child-label">Tek.</text>
+  <text x="860" y="768" class="node-label child-label">Takip</text>
+
+  <!-- ═══════════════════ MAIN NODES ═══════════════════ -->
+
+  <!-- GREEN - İlgi Alanları -->
+  <circle cx="370" cy="270" r="52" class="node-green" filter="url(#glow-soft)" data-info='{"title":"İlgi Alanları","color":"#1db888","text":"Bilgisayar sistemleri, açık kaynak teknolojileri ve tıbbi konularda derin ilgi ve araştırma yapma."}'/>
+  <text x="370" y="264" class="node-label main-label">İLGİ</text>
+  <text x="370" y="276" class="node-label main-label">ALANLARI</text>
+
+  <!-- PURPLE - Projeler -->
+  <circle cx="820" cy="155" r="52" class="node-purple" filter="url(#glow-soft)" data-info='{"title":"Projeler","color":"#7c4dff","text":"Kişisel ve akademik projeler. Yazılım, veri yönetimi ve web uygulamaları geliştirme."}'/>
+  <text x="820" y="152" class="node-label main-label">PROJ-</text>
+  <text x="820" y="164" class="node-label main-label">ELER</text>
+
+  <!-- YELLOW - Beceriler (SEM) -->
+  <circle cx="980" cy="290" r="52" class="node-yellow" filter="url(#glow-soft)" data-info='{"title":"Beceriler","color":"#f5a623","text":"Teknik beceriler: Python, React, veritabanı yönetimi, web geliştirme ve veri analizi."}'/>
+  <text x="980" y="284" class="node-label main-label">BECERİ-</text>
+  <text x="980" y="296" class="node-label main-label">LER</text>
+
+  <!-- RED - Kariyer -->
+  <circle cx="960" cy="510" r="52" class="node-red" filter="url(#glow-soft)" data-info='{"title":"Kariyer","color":"#e84393","text":"Balıkesir Üniversitesi Bilgisayar Mühendisliği'nde eğitim. AI araçları ve modern teknolojilerle kariyer geliştirme."}'/>
+  <text x="960" y="507" class="node-label main-label">KARİ-</text>
+  <text x="960" y="519" class="node-label main-label">YER</text>
+
+  <!-- Gaming (daha aşağı ve sola taşındı) -->
+  <circle cx="340" cy="590" r="52" class="node-hobiler" filter="url(#glow-soft)" data-info='{"title":"Gaming","color":"#cc0000","text":"Video oyunları oynamak. Strateji, RPG ve kooperatif oyunlar. Eğlenme ve stres atmanın yolu."}'/>
+  <text x="340" y="593" class="node-label main-label">GAMING</text>
+
+  <!-- Hobiler (Gaming'in yerinde) -->
+  <circle cx="810" cy="660" r="52" class="node-orange" filter="url(#glow-soft)" data-info='{"title":"Tutkular","color":"#ff6d3a","text":"Elektronik, yazılım ve teknoloji ile ilgili DIY projeler. Yaratıcılık ve öğrenme tutkusu."}'/>
+  <text x="810" y="657" class="node-label main-label">HOBİ-</text>
+  <text x="810" y="669" class="node-label main-label">LER</text>
+
+  <!-- ═══════════════════ CENTRAL NODE ═══════════════════ -->
+  <circle cx="700" cy="450" r="78" class="node-central" filter="url(#glow-blue)" data-info='{"title":"Beynimin Haritası","color":"#1a8fe3","text":"Kişisel gelişim haritası. Eğitim, kariyer, ilgi alanları, beceriler, projeler ve tutkularından oluşan bütünsel yaşam görüşü."}'/>
+  <text x="700" y="443" class="node-label central-label">BEYNİMİN</text>
+  <text x="700" y="458" class="node-label central-label">HARİTASI</text>
+
+</svg>
+</div>
+
+<script>
+// Random background gradient generator
+const backgroundThemes = [
+  { color1: '#0d1b3e', color2: '#060d1f', color3: '#020710', pos: '30% 40%' },
+  { color1: '#1a0033', color2: '#0d001a', color3: '#050008', pos: '50% 30%' },
+  { color1: '#001a4d', color2: '#000d2b', color3: '#000510', pos: '40% 60%' },
+  { color1: '#2d0a3a', color2: '#1a0520', color3: '#0a0210', pos: '60% 40%' },
+  { color1: '#0a1a2e', color2: '#050d1a', color3: '#020608', pos: '25% 50%' },
+  { color1: '#1a0d2e', color2: '#0d0618', color3: '#050208', pos: '70% 35%' },
+  { color1: '#0d2b3a', color2: '#051620', color3: '#020810', pos: '45% 55%' },
+  { color1: '#2b1a3d', color2: '#160a22', color3: '#0a0310', pos: '35% 45%' },
+  { color1: '#0d1a3a', color2: '#060d22', color3: '#020410', pos: '55% 40%' },
+];
+
+const bgFade = document.getElementById('bg-fade');
+
+function setRandomBackgroundWithFade() {
+  const theme = backgroundThemes[Math.floor(Math.random() * backgroundThemes.length)];
+  const newBackground = `radial-gradient(ellipse at ${theme.pos}, ${theme.color1} 0%, ${theme.color2} 60%, ${theme.color3} 100%)`;
+
+  // Fade out
+  bgFade.style.opacity = '0.3';
+
+  // Change background midway through fade
+  setTimeout(() => {
+    bgFade.style.background = newBackground;
+    bgFade.style.opacity = '1';
+  }, 4500);
+}
+
+setRandomBackgroundWithFade();
+
+// Change background every 12 seconds with fade effect
+setInterval(setRandomBackgroundWithFade, 12000);
+
+// Star dust background
+const canvas = document.getElementById('starCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const stars = Array.from({length: 180}, () => ({
+  x: Math.random() * window.innerWidth,
+  y: Math.random() * window.innerHeight,
+  r: Math.random() * 1.2 + 0.2,
+  a: Math.random() * 0.6 + 0.1,
+  speed: Math.random() * 0.003 + 0.001,
+  offset: Math.random() * Math.PI * 2
+}));
+
+let frame = 0;
+function drawStars() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  frame += 0.01;
+  stars.forEach(s => {
+    const alpha = s.a * (0.4 + 0.6 * Math.sin(frame * s.speed * 100 + s.offset));
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(200,220,255,${alpha})`;
+    ctx.fill();
+  });
+  requestAnimationFrame(drawStars);
+}
+drawStars();
+
+// Subtle node pulse animation via JS
+const mainNodes = document.querySelectorAll('.node-central, .node-green, .node-purple, .node-yellow, .node-red, .node-teal, .node-orange');
+mainNodes.forEach((node, i) => {
+  let t = i * 0.8;
+  function pulse() {
+    t += 0.025;
+    const scale = 1 + 0.015 * Math.sin(t);
+    const cx = node.getAttribute('cx');
+    const cy = node.getAttribute('cy');
+    node.setAttribute('transform', `translate(${cx},${cy}) scale(${scale}) translate(${-cx},${-cy})`);
+    requestAnimationFrame(pulse);
+  }
+  pulse();
+});
+
+// Adjust circle radius for inward stroke and add inner line
+const allCircles = document.querySelectorAll('circle');
+
+allCircles.forEach(circle => {
+  const r = parseFloat(circle.getAttribute('r'));
+  const cx = parseFloat(circle.getAttribute('cx'));
+  const cy = parseFloat(circle.getAttribute('cy'));
+  const computedStyle = window.getComputedStyle(circle);
+  const strokeWidth = parseFloat(computedStyle.strokeWidth) || 0;
+  const circleClass = circle.getAttribute('class');
+
+  // Adjust outer circle radius
+  circle.setAttribute('r', r - (strokeWidth / 2));
+
+  // Create inner line circle
+  const innerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  innerCircle.setAttribute('cx', cx);
+  innerCircle.setAttribute('cy', cy);
+  innerCircle.setAttribute('r', r - (strokeWidth / 2) - 8);
+  innerCircle.setAttribute('stroke-width', '0');
+  innerCircle.setAttribute('pointer-events', 'none');
+
+  // Get very dark color based on original circle class
+  const colorMap = {
+    'node-central': '#051f2e',
+    'node-green': '#082140',
+    'node-purple': '#2a0f5f',
+    'node-yellow': '#6b4507',
+    'node-red': '#5a1535',
+    'node-teal': '#003a48',
+    'node-orange': '#6b2410',
+    'child-green': '#061a30',
+    'child-purple': '#260a7f',
+    'child-yellow': '#5a3a08',
+    'child-red': '#4a0f35',
+    'child-teal': '#002835',
+    'child-orange': '#5a1a0f'
+  };
+
+  // Match class and apply very dark color
+  for (const [className, darkColor] of Object.entries(colorMap)) {
+    if (circleClass.includes(className)) {
+      innerCircle.setAttribute('fill', darkColor);
+      break;
+    }
+  }
+
+  circle.parentNode.insertBefore(innerCircle, circle);
+});
+
+// Zoom functionality
+const svg = document.getElementById('mindmap');
+const infoPanel = document.getElementById('info-panel');
+const infoContent = document.getElementById('info-content');
+const closeBtn = document.querySelector('.close-btn');
+let isZoomed = false;
+let originalViewBox = '0 0 1400 900';
+
+function closeInfoPanel() {
+  infoPanel.classList.remove('visible');
+  infoContent.innerHTML = '';
+}
+
+const darkColorMap = {
+  '#1a8fe3': '#0d5c7f',
+  '#1db888': '#0f8860',
+  '#7c4dff': '#5a2dbf',
+  '#f5a623': '#c48a1f',
+  '#e84393': '#b0315f',
+  '#00bcd4': '#007889',
+  '#ff6d3a': '#d94a28',
+  '#cc0000': '#990000'
+};
+
+function showInfoPanel(data) {
+  infoContent.innerHTML = `
+    <h2 style="color: ${data.color};">${data.title}</h2>
+    <p>${data.text}</p>
+  `;
+  const borderColor = darkColorMap[data.color.toLowerCase()] || data.color;
+  infoPanel.style.borderColor = borderColor;
+  infoPanel.classList.add('visible');
+}
+
+allCircles.forEach(circle => {
+  // Skip innerCircles (they don't have data-info)
+  if (!circle.getAttribute('data-info')) return;
+
+  circle.classList.add('zoomable-node');
+  circle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const cx = parseFloat(circle.getAttribute('cx'));
+    const cy = parseFloat(circle.getAttribute('cy'));
+    const infoData = circle.getAttribute('data-info');
+
+    if (isZoomed) {
+      svg.setAttribute('viewBox', originalViewBox);
+      closeInfoPanel();
+      isZoomed = false;
+    } else {
+      const zoomLevel = 3;
+      const viewBoxWidth = 1400 / zoomLevel;
+      const viewBoxHeight = 900 / zoomLevel;
+      // Hafif sola kaydır
+      const x = cx - viewBoxWidth / 2.2;
+      const y = cy - viewBoxHeight / 2;
+
+      svg.setAttribute('viewBox', `${x} ${y} ${viewBoxWidth} ${viewBoxHeight}`);
+      isZoomed = true;
+
+      // Info panel göster (sadece data-info varsa)
+      if (infoData) {
+        try {
+          const data = JSON.parse(infoData);
+          showInfoPanel(data);
+        } catch (e) {
+          console.error('Info data parse error:', e);
+        }
+      } else {
+        closeInfoPanel();
+      }
+    }
+  });
+});
+
+closeBtn.addEventListener('click', () => {
+  if (isZoomed) {
+    svg.setAttribute('viewBox', originalViewBox);
+    closeInfoPanel();
+    isZoomed = false;
+  }
+});
+
+// Double-click to zoom out
+svg.addEventListener('dblclick', () => {
+  if (isZoomed) {
+    svg.setAttribute('viewBox', originalViewBox);
+    closeInfoPanel();
+    isZoomed = false;
+  }
+});
+</script>
+
+</body>
+</html>
